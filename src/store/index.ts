@@ -73,6 +73,7 @@ const actions = {
   baseInfoAct(context: any, config: any) {
     return new Promise((resolve, reject) => {
       baseInfo(config || context.state.config).then(res => {
+        console.log('baseInfo got')
         if (!res) {
           reject('获取基本信息失败！')
           return
@@ -87,8 +88,9 @@ const actions = {
 
   jobsAct(context:any, viewName:string) {
     return new Promise(async (resolve,reject) => {
+      let start = new Date().getTime()
       const jobs = await jobsList(context.state.config,viewName)
-
+      console.log('get jobs', jobs, new Date().getTime()-start)
       if(!jobs || jobs.length > 0) {
         reject("获取任务列表失败！")
         return

@@ -305,10 +305,14 @@ export default defineComponent({
     const setProgress = (job:any) => {
     //   let row = document.querySelectorAll('.el-table__fixed .el-table__row > td:nth-child(2)').item(job.index);
       let row = document.querySelectorAll('.n-data-table-table .n-data-table-tbody .n-data-table-tr > td:nth-child(2)').item(job.index);
-      if (job.buildStatus === 'FINISH') {
-        row.removeAttribute('style')
+      if (row) {
+        if (job.buildStatus === 'FINISH') {
+          row.removeAttribute('style');
+        } else {
+          row.setAttribute('style', 'background: linear-gradient(to right, #D9ECFF ' + job.progress + '%,#ffffff 0%)');
+        }
       } else {
-        row.setAttribute('style', 'background: linear-gradient(to right, #D9ECFF ' + job.progress + '%,#ffffff 0%)')
+        console.log('xxxxxxxxxx, row not exist')
       }
     }
 
@@ -433,15 +437,18 @@ export default defineComponent({
     }
 
     const jobsList = (viewName: string) => {
+      console.log('jobList,start', viewName)
+      let start = new Date().getTime()
         store.dispatch("jobsAct",viewName).then(async res => {
-            
+            console.log('jobsAct cost', new Date().getTime()-start)
             const jobList = res.jobs
+          start = new Date().getTime()
             for (let job of jobList) {
-                job.lastBuildTime = 'N/A';
+                // job.lastBuildTime = 'N/A';
                 utils.jobStatusToIcon(job)
-                await jobLastBuild(job)
+                // await jobLastBuild(job)
             }
-
+          console.log('finish jobLastBuild info', new Date().getTime()-start)
             jobs.value = jobList
             store.dispatch("listLoadingAct", false)
 
@@ -574,7 +581,7 @@ export default defineComponent({
     };
   },
   beforeMount() {
-
+    console.log('before jenkins mount', !this.$store.getters.listLoading)
     if(!this.$store.getters.listLoading) {
       this.$store.dispatch("listLoadingAct", true)
       this.viewNameList()
@@ -602,7 +609,7 @@ export default defineComponent({
             @update:value="handleViewNameValue"/>
         </n-gi>
         <n-gi>
-          <n-input v-model:value="jobName" type="text" placeholder="任务名称" />
+          <n-input v-model:value="jobName" type="text" placeholder="任务名称" clearable />
         </n-gi>
         <n-gi>
           <n-button type="success" @click="refreshJobsList">刷新列表</n-button>

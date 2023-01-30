@@ -11,15 +11,16 @@ export const baseInfo = (config: any) => {
    * @returns {*}
    */
 export const jobsList = async (config:any, viewName: string) => {
-    try {
+   let start = new Date().getTime()
+   try {
         const resp: any = await axiosConfig(config).get((viewName ? "/view/" + viewName : "") + "/api/json")
-        console.log(resp, "==========================")
+        console.log(resp, "==========================,jobList cost", new Date().getTime() - start)
         const res = resp.data
     
         if(!res.jobs) {
             return null
         }
-    
+        start = new Date().getTime()
         for (let i = 0; i < res.jobs.length; i++) {
             let job = res.jobs[i]
             if (job._class === 'com.cloudbees.hudson.plugins.folder.Folder') {
@@ -30,9 +31,10 @@ export const jobsList = async (config:any, viewName: string) => {
                 res.data.jobs.splice(i, 1)
             }
         }
+      console.log('get folder job cost', new Date().getTime() - start)
         return res
     } catch(err) {
-        console.log(err, "err-----------------------------------");
+        console.log(err, "err-----------------------------------,cost", new Date().getTime() - start);
         
         return null
     }
