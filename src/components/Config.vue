@@ -1,6 +1,6 @@
 <script lang="ts">
-import { h, defineComponent,ref,computed } from 'vue'
-import { FormInst, NButton, NIcon, useMessage,useDialog, FormItemRule } from "naive-ui";
+import { h, defineComponent,ref,computed, onMounted } from 'vue'
+import { FormInst, NButton, NIcon, useMessage,useDialog, FormItemRule, NCard, NForm, NFormItem, NInput, NSelect } from "naive-ui";
 import { Edit, Delete, HelpFilled } from '@vicons/carbon'
 import utils from "@/utils/toolsbox"
 import { useStore } from 'vuex'
@@ -83,7 +83,8 @@ const initModel = () => {
         url: null,
         username: null,
         token: null,
-        _rev: null
+        _rev: null,
+        defaultView: 'all'
       }
     return obj
 }
@@ -157,23 +158,47 @@ export default defineComponent({
         const testLoading = ref(false)
         let modelRef = ref(initModel())
         let dataList = ref<any>(getConfList())
+        const configForm = ref({
+          jenkinsUrl: '',
+          username: '',
+          password: '',
+          defaultView: 'all'
+        });
+        const viewOptions = ref([]);
+
+        const loadViews = async (config: any) => {
+          try {
+            const response = await store.dispatch("baseInfoAct", config);
+            const views = response.views;
+            viewOptions.value = views.map((view: any) => ({
+              label: view.name,
+              value: view.name
+            }));
+          } catch (error) {
+            console.error("加载视图列表失败", error);
+            viewOptions.value = [];
+          }
+        };
+
+        onMounted(() => {
+          loadViews(modelRef.value);
+        });
 
         const addConfigModel = () => {
-           
             showModalRef.value = true
         }
 
         const handleSaveConfig = () => {
             formRef.value?.validate((errors) => {
                 if (!errors) {
-                   
                     let config:any = {
-                       _id: modelRef.value._id || "",
+                        _id: modelRef.value._id || "",
                         data: {
                             name: modelRef.value.name,
                             url: modelRef.value.url,
                             username: modelRef.value.username,
-                            token: modelRef.value.token
+                            token: modelRef.value.token,
+                            defaultView: modelRef.value.defaultView
                         },
                         _rev: modelRef.value._rev
                     }
@@ -206,17 +231,24 @@ export default defineComponent({
         }
 
         const editConfig = (rowData: any) => {
-
             modelRef.value = {
                 _id: rowData._id,
                 name: rowData.data.name,
                 url: rowData.data.url,
                 username: rowData.data.username,
                 token: rowData.data.token,
+                defaultView: rowData.data.defaultView || 'all',
                 _rev: rowData._rev
-            } as any
+            } as any;
 
-            showModalRef.value = true
+            // 加载对应 Jenkins 的视图列表
+            loadViews({
+                url: rowData.data.url,
+                username: rowData.data.username,
+                token: rowData.data.token
+            });
+
+            showModalRef.value = true;
         }
 
         const deleteConfig = (rowData: any) => {
@@ -242,34 +274,51 @@ export default defineComponent({
         }
 
         const handleTestConnect = () => {
-            testLoading.value = true
+            testLoading.value = true;
             formRef.value?.validate((errors) => {
                 if (!errors) {
-                     const config: any = {
-                       url: modelRef.value.url,
-                       username: modelRef.value.username,
-                       token: modelRef.value.token
-                    }
+                    const config: any = {
+                        url: modelRef.value.url,
+                        username: modelRef.value.username,
+                        token: modelRef.value.token
+                    };
 
                     store.dispatch("baseInfoAct", config).then(res => {
-                        testLoading.value = false
+                        testLoading.value = false;
                         if(res._class === "hudson.model.Hudson") {
-                            message.success("成功")
+                            message.success("成功");
+                            // 测试连接成功后加载视图列表
+                            loadViews(config);
                         } else {
-                            message.error("无法连接！")
+                            message.error("无法连接！");
                         }
                     }).catch(err => {
-                        testLoading.value = false
-                        message.error("无法连接！")
-                    })
+                        testLoading.value = false;
+                        message.error("无法连接！");
+                    });
                 } else {
-                    console.log(errors)
-                    testLoading.value = false
-                    message.error("验证失败")
+                    console.log(errors);
+                    testLoading.value = false;
+                    message.error("验证失败");
                 }
-            })
-            
+            });
         }
+
+        const loadConfig = () => {
+          const config = utools.dbStorage.getItem('jenkins_config');
+          if (config) {
+            configForm.value = JSON.parse(config);
+          }
+        };
+
+        const saveConfig = () => {
+          try {
+            utools.dbStorage.setItem('jenkins_config', JSON.stringify(configForm.value));
+            message.success('配置保存成功');
+          } catch (error) {
+            message.error('配置保存失败');
+          }
+        };
 
         return {
             formRef,
@@ -283,7 +332,10 @@ export default defineComponent({
             size: ref('medium'),
             handleCloseModel,
             handleTestConnect,
-            testLoading
+            testLoading,
+            configForm,
+            viewOptions,
+            saveConfig
         }
     },
 })
@@ -350,6 +402,13 @@ export default defineComponent({
                     </n-popover>
                   </template>
                     <n-input v-model:value="model.token" type="password" show-password-on="mousedown" placeholder="令牌"/>
+                </n-form-item>
+                <n-form-item label="默认视图" path="defaultView">
+                    <n-select
+                        v-model:value="model.defaultView"
+                        :options="viewOptions"
+                        placeholder="请选择默认视图"
+                    />
                 </n-form-item>
             </n-form>
         </div>

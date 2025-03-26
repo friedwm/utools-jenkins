@@ -12,6 +12,8 @@ import {
   getJob,
   handleGitParameter } from "@/api/jenkins"
 
+declare const utools: any;
+
 const state = {
   config: {},
   baseInfo: {},
@@ -28,6 +30,14 @@ const getters = {
   },
   listLoading: (state: any) => {
     return state.listLoading
+  },
+  defaultView: (state: any) => {
+    const config = utools.dbStorage.getItem('jenkins_config');
+    if (config) {
+      const parsedConfig = JSON.parse(config);
+      return parsedConfig.defaultView || 'all';
+    }
+    return 'all';
   }
 }
 

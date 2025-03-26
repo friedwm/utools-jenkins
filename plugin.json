@@ -1,0 +1,23 @@
+{
+	"pluginName": "jenkins",
+	"description": "jenkins插件, 可搜索jenkins，构建项目和查看最后构建时间，查看构建进度等",
+	"version": "v1.0.0",
+	"preload": "preload.js",
+	"main": "index.html",
+	"logo": "jenkins.png",
+	"homepage": "https://github.com/zyw/utools-jenkins",
+	"development": {
+		"main": "http://localhost:8080"
+	},
+	"features": [
+		{
+			"code": "jenkins",
+			"explain": "jenkins任务列表，任务构建，任务日志查看",
+			"cmds": [
+				"jenkins",
+				"jk"
+			]
+		}
+	],
+	"author": "zyw"
+}

@@ -1,22 +1,36 @@
 <script lang="ts">
 import { NButton, NIcon,NTime,SelectOption, useMessage, useDialog } from "naive-ui";
-import { Construct as ConstructIcon, CloseCircleOutline } from "@vicons/ionicons5";
-import { ChangeCatalog,HelpFilled } from "@vicons/carbon";
-import { h, defineComponent, ref, computed, nextTick, watch } from "vue";
+import { Construct as ConstructIcon, CloseCircleOutline, EyeOutline, Eye } from "@vicons/ionicons5";
+import { ChangeCatalog } from "@vicons/carbon";
+import { h, defineComponent, ref, computed, nextTick, watch, onMounted } from "vue";
 import { useStore } from 'vuex'
 import utils from "@/utils/toolsbox";
 import StatusIcon from "@/components/StatusIcon.vue"
+import FavoriteJobs from './FavoriteJobs.vue'
 
 const utools = window.utools
 
 type TableFunArg = (row: any, index: number) => void
 type TableFunArg2 = (row: any) => void
 
+const isJobFavorited = (jobName: string) => {
+  try {
+    const favorites = utools.dbStorage.getItem('favorite_jobs');
+    if (!favorites) return false;
+    const favoriteJobs = JSON.parse(favorites);
+    return favoriteJobs.some((job: any) => job.name === jobName);
+  } catch (error) {
+    console.error('Error checking favorite status:', error);
+    return false;
+  }
+};
+
 const createColumns = (
   { buildJobParamsDialog }: { buildJobParamsDialog: TableFunArg },
   { cancelBuildJob }: { cancelBuildJob: TableFunArg2 },
   { viewLog }: { viewLog: TableFunArg2 },
-  { handleJobName }: { handleJobName: TableFunArg2 }
+  { handleJobName }: { handleJobName: TableFunArg2 },
+  { addToFavorites }: { addToFavorites: TableFunArg2 }
 ) => {
   return [
     {
@@ -66,7 +80,7 @@ const createColumns = (
     {
       title: "操作",
       key: "action",
-      width: 150,
+      width: 200,
       render(row: any, index: number) {
           const ops = [];
           if(row.buildStatus && row.buildStatus !== 'FINISH') {
@@ -105,7 +119,6 @@ const createColumns = (
                     }),
                 }
             )
-            
           }
           ops[1] = h(
                 NButton,
@@ -124,6 +137,26 @@ const createColumns = (
                 icon: () =>
                     h(NIcon, {
                     component: ChangeCatalog,
+                    }),
+                }
+            )
+          ops[2] = h(
+                NButton,
+                {
+                strong: true,
+                secondary: true,
+                circle: true,
+                type: "success",
+                title: isJobFavorited(row.name) ? "取消关注" : "关注",
+                style: {
+                    marginLeft: "10px",
+                },
+                onClick: () => addToFavorites(row),
+                },
+                {
+                icon: () =>
+                    h(NIcon, {
+                    component: isJobFavorited(row.name) ? Eye : EyeOutline,
                     }),
                 }
             )
@@ -148,7 +181,7 @@ const jenkinsList = () => {
 
 export default defineComponent({
   name: "Jenkins",
-  components: { StatusIcon, HelpFilled },
+  components: { StatusIcon, EyeOutline, Eye, FavoriteJobs },
   setup() {
     const store = useStore()
     const message = useMessage()
@@ -166,8 +199,7 @@ export default defineComponent({
     const jobs = ref<any>([{}])
     const jobName = ref("")
     const viewNames = ref<any>([{}])
-    const viewName = ref("all")
-    
+    const viewName = ref(store.state.config?.defaultView || 'all')
     
     store.dispatch("configAct",configList?.value[0]?.data)
 
@@ -444,9 +476,7 @@ export default defineComponent({
             const jobList = res.jobs
           start = new Date().getTime()
             for (let job of jobList) {
-                // job.lastBuildTime = 'N/A';
                 utils.jobStatusToIcon(job)
-                // await jobLastBuild(job)
             }
           console.log('finish jobLastBuild info', new Date().getTime()-start)
             jobs.value = jobList
@@ -476,8 +506,10 @@ export default defineComponent({
         store.dispatch("configAct",option.data)
         store.dispatch("listLoadingAct", true)
         viewNameList()
-        viewName.value = "all"
-        jobsList(viewName.value)
+        // 使用配置的默认视图
+        const defaultView = (option.data as any)?.defaultView || 'all'
+        viewName.value = defaultView
+        jobsList(defaultView)
     }
 
     const handleViewNameValue = (value: string, option: SelectOption) => {
@@ -543,6 +575,108 @@ export default defineComponent({
       return options
     })
 
+    const addToFavorites = (job: any) => {
+      console.log('Adding to favorites:', job);
+      
+      // 获取现有的关注列表
+      let favorites = [];
+      try {
+        const storedFavorites = utools.dbStorage.getItem('favorite_jobs');
+        favorites = storedFavorites ? JSON.parse(storedFavorites) : [];
+        console.log('Current favorites:', favorites);
+      } catch (error) {
+        console.error('Error reading favorites:', error);
+        favorites = [];
+      }
+      
+      // 检查是否已经关注
+      const existingIndex = favorites.findIndex((j: { name: string }) => j.name === job.name);
+      if (existingIndex !== -1) {
+        // 如果已关注，则取消关注
+        favorites.splice(existingIndex, 1);
+        message.success("已取消关注");
+      } else {
+        // 如果未关注，则添加关注
+        const favoriteJob = {
+          name: job.name,
+          icon: job.icon || 'help',
+          color: job.color || '#666666',
+          anime: job.anime || false,
+          lastBuildTime: job.lastBuildTime || null,
+          buildStatus: job.buildStatus || null,
+          curBuildingNumber: job.curBuildingNumber || null,
+          curBuildingQueueItemId: job.curBuildingQueueItemId || null
+        };
+        favorites.push(favoriteJob);
+        message.success("已添加到关注列表");
+      }
+      
+      // 保存到本地存储
+      try {
+        utools.dbStorage.setItem('favorite_jobs', JSON.stringify(favorites));
+        console.log('Successfully saved favorites:', favorites);
+        // 强制更新视图
+        nextTick(() => {
+          // 重新加载任务列表以更新图标
+          loadJobs();
+        });
+      } catch (error) {
+        console.error('Error saving favorites:', error);
+        message.error("操作失败");
+      }
+    };
+
+    const loadJobs = async () => {
+      try {
+        store.dispatch("listLoadingAct", true);
+        const response = await store.dispatch("jobsAct", viewName.value);
+        const jobList = response.jobs;
+        for (let job of jobList) {
+          utils.jobStatusToIcon(job);
+        }
+        jobs.value = jobList;
+      } catch (error) {
+        console.error("加载任务列表失败", error);
+      } finally {
+        store.dispatch("listLoadingAct", false);
+      }
+    };
+
+    const loadViews = async () => {
+      try {
+        const response = await store.dispatch("baseInfoAct");
+        const vns = response.views;
+        const selectVns = [];
+        for (let vn of vns) {
+          selectVns.push({
+            label: vn.name,
+            value: vn.name,
+          });
+        }
+        viewNames.value = selectVns;
+      } catch (error) {
+        console.error("加载视图列表失败", error);
+      }
+    };
+
+    onMounted(async () => {
+      await loadViews();
+      // 只在切换到任务标签页时加载任务列表
+      if (viewName.value === "all") {
+        // 使用当前配置的默认视图
+        const currentConfig = store.state.config;
+        const defaultView = currentConfig?.defaultView || 'all';
+        viewName.value = defaultView;
+        await loadJobs();
+      }
+    });
+
+    watch(viewName, async (newVal) => {
+      if (newVal) {
+        await loadJobs();
+      }
+    });
+
     return {
       jobParameterTypeOfSeparator: ref(["ParameterSeparatorDefinition"]),
       jobParameterTypeOfFile: ref(["FileParameterDefinition", "PatchParameterDefinition"]),
@@ -560,7 +694,7 @@ export default defineComponent({
       jobName,
       viewNames,
       filterJobList,
-      columns: createColumns( { buildJobParamsDialog }, { cancelBuildJob }, { viewLog }, { handleJobName } ),
+      columns: createColumns( { buildJobParamsDialog }, { cancelBuildJob }, { viewLog }, { handleJobName }, { addToFavorites } ),
       handleJKNameValue,
       handleViewNameValue,
       refreshJobsList,
@@ -577,7 +711,10 @@ export default defineComponent({
       showLogModal,
       logJobName,
       logLoading,
-      showLoading
+      showLoading,
+      addToFavorites,
+      loadJobs,
+      loadViews
     };
   },
   beforeMount() {
@@ -585,7 +722,11 @@ export default defineComponent({
     if(!this.$store.getters.listLoading) {
       this.$store.dispatch("listLoadingAct", true)
       this.viewNameList()
-      this.jobsList("all")
+      // 使用配置的默认视图
+      const currentConfig = this.$store.state.config;
+      const defaultView = currentConfig?.defaultView || 'all';
+      this.viewName = defaultView;
+      this.jobsList(defaultView);
     }
   },
   mounted() {
@@ -620,7 +761,7 @@ export default defineComponent({
         :columns="columns"
         :data="filterJobList"
         class="data-table"/>
-
+      
     <!-- 获取构建参数弹出框 -->
     <n-modal v-model:show="showbuildParamsModal" 
         preset="dialog" 
